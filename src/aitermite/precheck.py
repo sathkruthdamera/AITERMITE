@@ -14,13 +14,30 @@ class PrecheckResult:
 KNOWN_COMMAND_TYPOS = {
     "gti": "git", "gi": "git", "gitg": "git", "pyhton": "python", "pythn": "python", "python3.13": "python",
     "pip3.13": "pip", "dockre": "docker", "docer": "docker", "kubctl": "kubectl", "kubeclt": "kubectl",
+    "terrafom": "terraform", "terform": "terraform", "awscli": "aws", "azcli": "az",
     "npm": "npm", "npx": "npx", "yarn": "yarn", "pnpm": "pnpm", "cd..": "cd .."
 }
+
 SUBCOMMAND_TYPOS = {
-    "git": {"sttaus": "status", "statsu": "status", "chekcout": "checkout", "comit": "commit", "pus": "push", "pul": "pull", "brnch": "branch"},
-    "npm": {"isntall": "install", "isntal": "install", "rn": "run", "startt": "start"},
-    "docker": {"pss": "ps", "bulid": "build", "runn": "run"},
-    "kubectl": {"gett": "get", "aply": "apply", "decribe": "describe"},
+    "git": {
+        "sttaus": "status", "statsu": "status", "chekcout": "checkout", "chekout": "checkout",
+        "comit": "commit", "cmmit": "commit", "pus": "push", "pul": "pull", "brnch": "branch",
+        "rest": "reset", "mrege": "merge", "reabse": "rebase", "swtich": "switch", "swich": "switch",
+    },
+    "npm": {"isntall": "install", "isntal": "install", "instal": "install", "rn": "run", "runn": "run", "startt": "start"},
+    "docker": {"pss": "ps", "bulid": "build", "buid": "build", "runn": "run", "imgaes": "images", "iamges": "images", "comopse": "compose"},
+    "kubectl": {"gett": "get", "aply": "apply", "appy": "apply", "decribe": "describe", "descrbe": "describe", "delte": "delete", "log": "logs"},
+    "terraform": {"paln": "plan", "plna": "plan", "appy": "apply", "aply": "apply", "destory": "destroy", "destro": "destroy", "innit": "init"},
+    "aws": {"s33": "s3", "ec22": "ec2", "iamn": "iam", "cloudwatchh": "cloudwatch", "lambd": "lambda"},
+    "az": {"logn": "login", "grop": "group", "aksx": "aks", "webap": "webapp"},
+}
+
+TOKEN_TYPOS = {
+    "--buld": "--build", "--bulid": "--build", "--buid": "--build",
+    "--no-cahe": "--no-cache", "--no-cahce": "--no-cache",
+    "--detatch": "--detach", "--deatch": "--detach",
+    "--varfile": "--var-file", "--var-fiel": "--var-file",
+    "--namesapce": "--namespace", "--namspace": "--namespace",
 }
 
 def _tokens(command: str) -> list[str]:
@@ -31,6 +48,15 @@ def _best(word: str, choices: list[str]) -> tuple[str | None, float]:
     if not matches:
         return None, 0.0
     return matches[0], difflib.SequenceMatcher(None, word, matches[0]).ratio()
+
+def _fix_any_token(parts: list[str]) -> bool:
+    changed = False
+    for i, token in enumerate(parts):
+        replacement = TOKEN_TYPOS.get(token)
+        if replacement:
+            parts[i] = replacement
+            changed = True
+    return changed
 
 def precheck_command(command: str) -> PrecheckResult:
     parts = _tokens(command)
@@ -53,6 +79,8 @@ def precheck_command(command: str) -> PrecheckResult:
         if replacement:
             parts[1] = replacement
             changed = True
+    if _fix_any_token(parts):
+        changed = True
     if not changed:
         return PrecheckResult(command, None, 0.0, "no obvious typo detected")
-    return PrecheckResult(command, " ".join(parts), 0.94, "Known command/subcommand typo detected")
+    return PrecheckResult(command, " ".join(parts), 0.94, "Known command/subcommand/flag typo detected")

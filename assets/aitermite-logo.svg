@@ -1,0 +1,27 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AITERMITE logo">
+  <rect width="1200" height="360" rx="36" fill="#071013"/>
+  <rect x="50" y="48" width="1100" height="264" rx="30" fill="#0B1518" stroke="#00E5FF" stroke-width="4"/>
+  <circle cx="93" cy="90" r="10" fill="#00E5FF"/>
+  <circle cx="125" cy="90" r="10" fill="#14F195"/>
+  <circle cx="157" cy="90" r="10" fill="#FFFFFF" opacity="0.75"/>
+  <path d="M250 92 C190 100 160 148 168 203 C176 260 225 292 284 282 C340 272 375 222 364 166 C354 112 309 84 250 92Z" fill="#EAFBFF"/>
+  <path d="M219 112 C194 132 187 171 202 202 C217 234 254 250 289 240 C325 229 347 196 339 161 C331 122 290 95 250 102" fill="#0B1518" opacity="0.22"/>
+  <circle cx="231" cy="166" r="22" fill="#071013"/>
+  <circle cx="294" cy="166" r="22" fill="#071013"/>
+  <circle cx="236" cy="162" r="7" fill="#00E5FF"/>
+  <circle cx="299" cy="162" r="7" fill="#00E5FF"/>
+  <path d="M207 107 C166 58 132 48 102 64" stroke="#00E5FF" stroke-width="10" stroke-linecap="round"/>
+  <path d="M314 107 C355 58 389 48 419 64" stroke="#00E5FF" stroke-width="10" stroke-linecap="round"/>
+  <path d="M235 229 L202 270" stroke="#00E5FF" stroke-width="12" stroke-linecap="round"/>
+  <path d="M286 229 L319 270" stroke="#00E5FF" stroke-width="12" stroke-linecap="round"/>
+  <path d="M218 266 L178 245" stroke="#EAFBFF" stroke-width="10" stroke-linecap="round"/>
+  <path d="M303 266 L343 245" stroke="#EAFBFF" stroke-width="10" stroke-linecap="round"/>
+  <text x="455" y="145" fill="#00E5FF" font-family="Arial, Helvetica, sans-serif" font-size="82" font-weight="900" letter-spacing="6">AI</text>
+  <text x="555" y="145" fill="#EAFBFF" font-family="Arial, Helvetica, sans-serif" font-size="82" font-weight="900" letter-spacing="6">TERMITE</text>
+  <text x="462" y="205" fill="#B7F7FF" font-family="Consolas, Monaco, monospace" font-size="34" font-weight="700">&gt;_ AI-powered terminal error fixer</text>
+  <path d="M465 238 H1010" stroke="#00E5FF" stroke-width="3" opacity="0.9"/>
+  <circle cx="1010" cy="238" r="8" fill="#00E5FF"/>
+  <path d="M1032 238 H1085 V205" stroke="#00E5FF" stroke-width="3" opacity="0.85"/>
+  <circle cx="1085" cy="205" r="7" fill="#14F195"/>
+  <text x="462" y="278" fill="#EAFBFF" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="2">AUTO-SUGGESTS FIXES AFTER FAILED COMMANDS</text>
+</svg>

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/aitermite-logo.svg" alt="AITERMITE logo" width="900">
+</p>
+
 # AITERMITE
 
 **AITERMITE** is an AI-powered terminal error fixer for Windows, macOS, and Linux. It gives command-fix suggestions manually, before Enter where the shell supports it, and automatically after a command fails through shell hooks.
@@ -8,8 +12,6 @@ Latest local build prepared in this chat: **v0.4.1 Clink Bootstrap**.
 
 Main features:
 
-- Cyan terminal branding for `AITERMITE` text.
-- Animated install-time terminal logo.
 - Manual command fixing with `aitermite`.
 - Inline fixing with `aitermite <command>`.
 - Automatic post-failure suggestion hooks.

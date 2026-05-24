@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import platform
@@ -11,14 +12,46 @@ from .history import last_command
 from .precheck import precheck_command
 from .providers import suggest
 from .safety import assess_command
-from .shell_integration import animation_text, shell_init
+from .shell_integration import animation_text, install_shell, shell_init
 
 CYAN = "\033[96m"
 RESET = "\033[0m"
 
+AITERMITE_COMMANDS = {
+    "doctor": "--doctor",
+    "version": "--version",
+    "precheck": "--precheck",
+    "install-shell": "--install-shell",
+    "shell-init": "--shell-init",
+    "help": "--help",
+}
+
+AITERMITE_COMMAND_ALIASES = {
+    "doc": "doctor",
+    "check": "doctor",
+    "health": "doctor",
+    "docter": "doctor",
+    "dotcor": "doctor",
+    "docotr": "doctor",
+    "doctro": "doctor",
+    "verison": "version",
+    "versoin": "version",
+    "instal-shell": "install-shell",
+    "install-shel": "install-shell",
+    "shellinit": "shell-init",
+}
+
 
 def cyan(text: str, enabled: bool = True) -> str:
     return f"{CYAN}{text}{RESET}" if enabled else text
+
+
+def print_doctor(provider: str, no_color: bool = False) -> None:
+    print(cyan("AITERMITE doctor", not no_color))
+    print(f"version: {__version__}")
+    print(f"python: {sys.version.split()[0]}")
+    print(f"platform: {platform.platform()}")
+    print(f"provider: {provider}")
 
 
 def print_suggestion(s, typed: str, *, postfail: bool = False, no_color: bool = False) -> None:
@@ -31,6 +64,47 @@ def print_suggestion(s, typed: str, *, postfail: bool = False, no_color: bool = 
     print(f"Risk: {s.risk}")
     print(f"Provider: {s.provider}")
     print(f"Run manually: {s.command}")
+
+
+def maybe_handle_aitermite_builtin_typo(args: argparse.Namespace) -> int | None:
+    if not args.command:
+        return None
+    first = args.command[0].strip().lower().lstrip("-")
+    if not first:
+        return None
+    canonical = AITERMITE_COMMAND_ALIASES.get(first)
+    if canonical is None and first not in AITERMITE_COMMANDS:
+        match = difflib.get_close_matches(first, list(AITERMITE_COMMANDS), n=1, cutoff=0.72)
+        canonical = match[0] if match else None
+    elif first in AITERMITE_COMMANDS:
+        canonical = first
+    if canonical is None:
+        return None
+    if canonical == "doctor":
+        if first != canonical:
+            print(cyan("AITERMITE suggestion", not args.no_color))
+            print(f"Typed: aitermite {args.command[0]}")
+            print("Fix: aitermite doctor")
+            print("Why: AITERMITE command typo detected.")
+            print("Confidence: high (0.96)")
+            print()
+        print_doctor(args.provider, args.no_color)
+        return 0
+    if canonical == "version":
+        if first != canonical:
+            print("Fix: aitermite version")
+        print(__version__)
+        return 0
+    if canonical == "help":
+        print("Run: aitermite --help")
+        return 0
+    if canonical in {"install-shell", "shell-init", "precheck"} and first != canonical:
+        print(cyan("AITERMITE suggestion", not args.no_color))
+        print(f"Typed: aitermite {args.command[0]}")
+        print(f"Fix: aitermite {canonical}")
+        print("Why: AITERMITE command typo detected.")
+        return 0
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,20 +126,25 @@ def main(argv: list[str] | None = None) -> int:
         print(__version__)
         return 0
     if args.doctor:
-        print(cyan("AITERMITE doctor", not args.no_color))
-        print(f"version: {__version__}")
-        print(f"python: {sys.version.split()[0]}")
-        print(f"platform: {platform.platform()}")
-        print(f"provider: {args.provider}")
+        print_doctor(args.provider, args.no_color)
         return 0
     if args.shell_init:
         print(shell_init(args.shell_init))
         return 0
     if args.install_shell:
         print(animation_text(color=not args.no_color))
-        print(shell_init(args.install_shell))
-        print(cyan("Copy the shell init block above into your shell profile, or use the packaged installer scripts from the generated ZIP.", not args.no_color))
+        result = install_shell(args.install_shell)
+        print(cyan(f"Installed AITERMITE shell integration for {result.shell}", not args.no_color))
+        for path in result.paths:
+            print(f"Updated: {path}")
+        for message in result.messages:
+            print(message)
+        print("Restart your terminal, then test with: gti status")
         return 0
+
+    builtin_result = maybe_handle_aitermite_builtin_typo(args)
+    if builtin_result is not None:
+        return builtin_result
 
     command = " ".join(args.command).strip()
     if command.startswith("-- "):

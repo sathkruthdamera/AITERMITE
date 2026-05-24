@@ -2,13 +2,18 @@
   <img src="assets/aitermite-logo.svg" alt="AITERMITE logo" width="900">
 </p>
 
+<p align="center">
+  <a href="https://pypi.org/project/aitermite/"><img src="https://img.shields.io/pypi/v/aitermite.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/aitermite/"><img src="https://img.shields.io/pypi/pyversions/aitermite.svg" alt="Python versions"></a>
+</p>
+
 # AITERMITE
 
 **AITERMITE** is an AI-powered terminal error fixer for Windows, macOS, and Linux. It gives command-fix suggestions manually, before Enter where the shell supports it, and automatically after a command fails through shell hooks.
 
 ## Current packaged release
 
-Latest local build prepared in this chat: **v0.4.1 Clink Bootstrap**.
+Latest PyPI release: **v0.4.1 Clink Bootstrap**.
 
 Main features:
 
@@ -25,6 +30,37 @@ Main features:
 - Clink bootstrap integration for true cmd.exe auto-hooks.
 - Secret redaction before provider calls.
 - Dangerous command blocking and safety checks.
+
+## Install from PyPI
+
+```bash
+python -m pip install aitermite
+aitermite --doctor
+```
+
+Upgrade to the latest published version:
+
+```bash
+python -m pip install --upgrade aitermite
+aitermite --version
+```
+
+Install a specific version:
+
+```bash
+python -m pip install aitermite==0.4.1
+```
+
+## Quick start
+
+```bash
+aitermite --doctor
+aitermite git push
+aitermite --precheck gti status
+aitermite --install-shell auto
+```
+
+After shell integration, restart the terminal. AITERMITE can then print suggestions after failed commands where the shell hook is supported.
 
 ## Install from wheel
 

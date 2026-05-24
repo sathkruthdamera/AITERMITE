@@ -1,38 +1,132 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+from dataclasses import dataclass
+
 CYAN = "\033[96m"
 RESET = "\033[0m"
+START_MARKER = "# >>> AITERMITE shell integration >>>"
+END_MARKER = "# <<< AITERMITE shell integration <<<"
 
 INSTALL_ANIMATION = [
     "AITERMITE  ◖>_       ◗  scanning shell",
     "AITERMITE  ◖ >_      ◗  wiring hooks",
-    "AITERMITE  ◖  >_     ◗  enabling pre-enter guard",
-    "AITERMITE  ◖   >_    ◗  enabling post-failure AI",
-    "AITERMITE  ◖    >_   ◗  setting latency budget",
-    "AITERMITE  ◖     >_  ◗  loading cyan terminal skin",
-    "AITERMITE  ◖      >_ ◗  ready",
+    "AITERMITE  ◖  >_     ◗  enabling post-failure AI",
+    "AITERMITE  ◖   >_    ◗  ready",
 ]
+
+@dataclass
+class InstallResult:
+    shell: str
+    paths: list[Path]
+    messages: list[str]
+
+    @property
+    def primary_path(self) -> Path:
+        return self.paths[0]
+
 
 def animation_text(color: bool = True) -> str:
     return "\n".join((CYAN + x + RESET) if color else x for x in INSTALL_ANIMATION)
+
+
+def detect_shell() -> str:
+    if os.name == "nt":
+        return "powershell"
+    shell = os.environ.get("SHELL", "").lower()
+    if "zsh" in shell:
+        return "zsh"
+    if "fish" in shell:
+        return "fish"
+    if "bash" in shell:
+        return "bash"
+    return "bash"
+
+
+def profile_path(shell: str) -> Path:
+    home = Path.home()
+    shell = shell.lower()
+    if shell == "zsh":
+        return home / ".zshrc"
+    if shell == "bash":
+        return home / ".bashrc"
+    if shell == "fish":
+        return home / ".config" / "fish" / "conf.d" / "aitermite.fish"
+    if shell in {"powershell", "pwsh"}:
+        if os.name == "nt":
+            return home / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1"
+        return home / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"
+    if shell == "cmd":
+        return home / ".aitermite" / "aitermite-cmd-init.bat"
+    if shell == "clink":
+        local = os.getenv("LOCALAPPDATA")
+        if local:
+            return Path(local) / "clink" / "aitermite.lua"
+        return home / ".aitermite" / "aitermite-clink.lua"
+    return home / ".profile"
+
+
+def _write_profile_block(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    block = f"{START_MARKER}\n{content.strip()}\n{END_MARKER}\n"
+    if START_MARKER in existing and END_MARKER in existing:
+        before = existing.split(START_MARKER, 1)[0].rstrip()
+        after = existing.split(END_MARKER, 1)[1].lstrip()
+        updated = before + "\n\n" + block + after
+    else:
+        updated = (existing.rstrip() + "\n\n" + block) if existing.strip() else block
+    path.write_text(updated, encoding="utf-8")
+
+
+def install_shell(shell: str) -> InstallResult:
+    shell = detect_shell() if shell == "auto" else shell.lower()
+    if shell == "cmd":
+        path = profile_path("cmd")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(cmd_init(), encoding="utf-8")
+        clink_path = profile_path("clink")
+        clink_path.parent.mkdir(parents=True, exist_ok=True)
+        clink_path.write_text(clink_lua(), encoding="utf-8")
+        return InstallResult("cmd", [path, clink_path], ["Wrote cmd.exe aliases and Clink hook. Run the BAT once or use Clink for auto post-failure suggestions."])
+    if shell == "clink":
+        path = profile_path("clink")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(clink_lua(), encoding="utf-8")
+        return InstallResult("clink", [path], ["Wrote Clink Lua hook."])
+    path = profile_path(shell)
+    _write_profile_block(path, shell_init(shell))
+    return InstallResult(shell, [path], [f"Installed {shell} integration. Restart terminal or source the profile."])
+
 
 def zsh_init() -> str:
     return r'''
 # AITERMITE zsh integration
 _aitermite_preexec(){ export AITERMITE_LAST_COMMAND="$1"; }
-_aitermite_precmd(){ local code=$?; if [ "$code" -ne 0 ] && [ -n "$AITERMITE_LAST_COMMAND" ]; then aitermite --postfail "$code" -- "$AITERMITE_LAST_COMMAND" 2>/dev/null; fi }
+_aitermite_precmd(){ local code=$?; if [ "$code" -ne 0 ] && [ -n "$AITERMITE_LAST_COMMAND" ]; then aitermite --postfail "$code" -- "$AITERMITE_LAST_COMMAND" 2>/dev/null || true; fi }
 autoload -Uz add-zsh-hook
 add-zsh-hook preexec _aitermite_preexec
 add-zsh-hook precmd _aitermite_precmd
+alias ait='aitermite'
+alias af='aitermite'
+alias aicheck='aitermite --precheck'
 '''
+
 
 def bash_init() -> str:
     return r'''
 # AITERMITE bash integration
-_aitermite_prompt(){ local code=$?; local cmd=$(history 1 | sed 's/^ *[0-9]* *//'); if [ "$code" -ne 0 ] && [ -n "$cmd" ]; then aitermite --postfail "$code" -- "$cmd" 2>/dev/null; fi }
-PROMPT_COMMAND="_aitermite_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+__aitermite_last_command=""
+__aitermite_preexec(){ local cmd="$BASH_COMMAND"; case "$cmd" in __aitermite_*|aitermite*|ait\ *|af\ *|aicheck\ *|history\ *) return ;; esac; __aitermite_last_command="$cmd"; }
+__aitermite_postfail(){ local code=$?; if [ "$code" -ne 0 ] && [ -n "$__aitermite_last_command" ]; then aitermite --postfail "$code" -- "$__aitermite_last_command" 2>/dev/null || true; fi; return $code; }
+trap '__aitermite_preexec' DEBUG
+if [ -n "${PROMPT_COMMAND:-}" ]; then PROMPT_COMMAND="__aitermite_postfail; $PROMPT_COMMAND"; else PROMPT_COMMAND="__aitermite_postfail"; fi
 alias ait='aitermite'
+alias af='aitermite'
+alias aicheck='aitermite --precheck'
 '''
+
 
 def fish_init() -> str:
     return r'''
@@ -40,63 +134,88 @@ def fish_init() -> str:
 function __aitermite_postfail --on-event fish_postexec
     set -l code $status
     if test $code -ne 0
-        aitermite --postfail $code -- $argv 2>/dev/null
+        set -l line (string join " " $argv)
+        if test -n "$line"
+            aitermite --postfail $code -- "$line" 2>/dev/null
+        end
     end
 end
 alias ait aitermite
+alias af aitermite
+alias aicheck "aitermite --precheck"
 '''
+
 
 def powershell_init() -> str:
     return r'''
 # AITERMITE PowerShell integration
-function Invoke-AitermitePostFail {
-  if ($LASTEXITCODE -ne 0) {
-    $cmd = (Get-History -Count 1).CommandLine
-    if ($cmd) { aitermite --postfail $LASTEXITCODE -- $cmd }
-  }
+if (-not $global:__AITERMITE_ORIGINAL_PROMPT) { $global:__AITERMITE_ORIGINAL_PROMPT = (Get-Command prompt).ScriptBlock }
+$global:__AITERMITE_LAST_HISTORY_ID = 0
+function global:prompt {
+    $ok = $?
+    $code = if ($global:LASTEXITCODE -is [int]) { [int]$global:LASTEXITCODE } elseif (-not $ok) { 1 } else { 0 }
+    try {
+        $hist = Get-History -Count 1 -ErrorAction SilentlyContinue
+        if ($hist -and $hist.Id -ne $global:__AITERMITE_LAST_HISTORY_ID -and $code -ne 0) {
+            $global:__AITERMITE_LAST_HISTORY_ID = $hist.Id
+            $cmd = [string]$hist.CommandLine
+            if ($cmd -and -not $cmd.TrimStart().StartsWith("aitermite")) { aitermite --postfail $code -- $cmd 2>$null }
+        }
+    } catch {}
+    Set-Alias ait aitermite
+    Set-Alias af aitermite
+    function global:aicheck { aitermite --precheck @args }
+    & $global:__AITERMITE_ORIGINAL_PROMPT
 }
-$global:__AitermitePrompt = $function:prompt
-function prompt { Invoke-AitermitePostFail; if ($global:__AitermitePrompt) { & $global:__AitermitePrompt } else { "PS> " } }
-Set-Alias ait aitermite
 '''
+
 
 def cmd_init() -> str:
     return r'''
 @echo off
-DOSKEY ait=aitermite $*
-DOSKEY af=aitermite $*
-DOSKEY aicheck=aitermite --precheck $*
-where clink >nul 2>nul && clink inject --quiet
+REM AITERMITE cmd.exe helpers. For automatic cmd.exe hooks, install Clink and use aitermite --install-shell clink.
+doskey ait=aitermite $*
+doskey af=aitermite $*
+doskey aicheck=aitermite --precheck $*
+where clink >nul 2>nul
+if %ERRORLEVEL% EQU 0 clink inject --quiet >nul 2>nul
 '''
+
 
 def clink_lua() -> str:
     return r'''
--- AITERMITE Clink cmd.exe auto post-failure hook
-local last_cmd = ""
-local function aitermite_filter(line) last_cmd = line; return line end
-clink.onfilterinput(aitermite_filter)
-clink.onendedit(function(line) last_cmd = line end)
-clink.onbeginedit(function() end)
+-- AITERMITE Clink integration for cmd.exe
+local last_line = ""
+local busy = false
+clink.onendedit(function(line) if line and line ~= "" then last_line = line end end)
 clink.prompt.register_filter(function(prompt)
-  local code = os.getenv("ERRORLEVEL") or "0"
-  if last_cmd ~= "" and code ~= "0" then
-    os.execute("aitermite --postfail " .. code .. " -- " .. string.format("%q", last_cmd))
-    last_cmd = ""
-  end
-  return prompt
-end, 90)
+    if busy or last_line == "" then return prompt end
+    local code = os.geterrorlevel and os.geterrorlevel() or 0
+    if code and code ~= 0 then
+        busy = true
+        os.execute('aitermite --postfail ' .. tostring(code) .. ' -- ' .. string.format('%q', last_line))
+        last_line = ""
+        busy = false
+    end
+    return prompt
+end, 50)
 '''
+
 
 def universal_init() -> str:
     return r'''
-# AITERMITE universal POSIX helper
+# AITERMITE universal helper
 alias ait='aitermite'
-arun(){ "$@"; local code=$?; if [ $code -ne 0 ]; then aitermite --postfail $code -- "$*"; fi; return $code; }
+alias af='aitermite'
+alias aicheck='aitermite --precheck'
+arun(){ "$@"; code=$?; if [ "$code" -ne 0 ]; then aitermite --postfail "$code" -- "$*" 2>/dev/null || true; fi; return "$code"; }
 '''
+
 
 def shell_init(shell: str) -> str:
     shell = (shell or "auto").lower()
-    if shell in {"zsh", "auto"}: return zsh_init()
+    if shell == "auto": shell = detect_shell()
+    if shell == "zsh": return zsh_init()
     if shell == "bash": return bash_init()
     if shell == "fish": return fish_init()
     if shell in {"powershell", "pwsh"}: return powershell_init()

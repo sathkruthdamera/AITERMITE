@@ -5,6 +5,7 @@ import difflib
 import json
 import os
 import platform
+import shutil
 import sys
 
 from . import __version__
@@ -12,7 +13,7 @@ from .history import last_command
 from .precheck import precheck_command
 from .providers import suggest
 from .safety import assess_command
-from .shell_integration import animation_text, install_shell, shell_init
+from .shell_integration import animation_text, detect_shell, install_shell, profile_path, shell_init
 
 CYAN = "\033[96m"
 RESET = "\033[0m"
@@ -52,6 +53,20 @@ def print_doctor(provider: str, no_color: bool = False) -> None:
     print(f"python: {sys.version.split()[0]}")
     print(f"platform: {platform.platform()}")
     print(f"provider: {provider}")
+
+    on_path = shutil.which("aitermite")
+    print(f"aitermite on PATH: {'yes (' + on_path + ')' if on_path else 'NO'}")
+    if not on_path:
+        scripts = os.path.join(os.path.dirname(sys.executable), "Scripts") if os.name == "nt" else os.path.dirname(sys.executable)
+        print(f"  hint: add the Scripts dir to PATH ({scripts}); shell hooks fall back to 'python -m aitermite'.")
+
+    shell = detect_shell()
+    prof = profile_path(shell)
+    installed = prof.exists() and ("AITERMITE" in prof.read_text(encoding="utf-8", errors="replace"))
+    print(f"shell: {shell}")
+    print(f"profile: {prof} ({'hook installed' if installed else 'no hook'})")
+    if not installed:
+        print("  hint: run 'aitermite --install-shell auto' then restart your terminal.")
 
 
 def print_suggestion(s, typed: str, *, postfail: bool = False, no_color: bool = False) -> None:

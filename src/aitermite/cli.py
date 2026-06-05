@@ -122,7 +122,18 @@ def maybe_handle_aitermite_builtin_typo(args: argparse.Namespace) -> int | None:
     return None
 
 
+def _harden_stdio() -> None:
+    """Avoid UnicodeEncodeError on legacy Windows consoles (cp1252) when output
+    contains non-ASCII characters (animation glyphs, provider suggestions)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _harden_stdio()
     parser = argparse.ArgumentParser(prog="aitermite", description="AI-powered terminal error fixer")
     parser.add_argument("command", nargs="*", help="Command to fix. If empty, uses shell history.")
     parser.add_argument("--version", action="store_true")

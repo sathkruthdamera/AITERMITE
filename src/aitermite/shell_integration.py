@@ -12,10 +12,10 @@ START_MARKER = "# >>> AITERMITE shell integration >>>"
 END_MARKER = "# <<< AITERMITE shell integration <<<"
 
 INSTALL_ANIMATION = [
-    "AITERMITE  ◖>_       ◗  scanning shell",
-    "AITERMITE  ◖ >_      ◗  wiring hooks",
-    "AITERMITE  ◖  >_     ◗  enabling post-failure AI",
-    "AITERMITE  ◖   >_    ◗  ready",
+    "AITERMITE  [>_       ]  scanning shell",
+    "AITERMITE  [ >_      ]  wiring hooks",
+    "AITERMITE  [  >_     ]  enabling post-failure AI",
+    "AITERMITE  [   >_    ]  ready",
 ]
 
 @dataclass

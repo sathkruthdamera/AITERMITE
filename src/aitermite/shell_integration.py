@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import sys
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -44,6 +46,32 @@ def detect_shell() -> str:
     return "bash"
 
 
+def launcher_command() -> str:
+    """Resolve a launcher that works even when the Scripts dir is not on PATH.
+
+    The shell hooks must invoke AITERMITE without relying on ``aitermite`` being
+    on PATH (a common pip ``--user`` install gotcha on Windows). ``python -m
+    aitermite`` via the current interpreter always resolves the package.
+    """
+    exe = shutil.which("aitermite")
+    if exe:
+        return f'"{exe}"'
+    return f'"{sys.executable}" -m aitermite'
+
+
+def powershell_profile_paths() -> list[Path]:
+    """All profile paths PowerShell may load, so the hook works regardless of
+    whether the user runs Windows PowerShell 5.1 or PowerShell 7+."""
+    home = Path.home()
+    if os.name == "nt":
+        docs = home / "Documents"
+        return [
+            docs / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1",  # Windows PowerShell 5.1
+            docs / "PowerShell" / "Microsoft.PowerShell_profile.ps1",         # PowerShell 7+
+        ]
+    return [home / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"]
+
+
 def profile_path(shell: str) -> Path:
     home = Path.home()
     shell = shell.lower()
@@ -54,9 +82,7 @@ def profile_path(shell: str) -> Path:
     if shell == "fish":
         return home / ".config" / "fish" / "conf.d" / "aitermite.fish"
     if shell in {"powershell", "pwsh"}:
-        if os.name == "nt":
-            return home / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1"
-        return home / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"
+        return powershell_profile_paths()[0]
     if shell == "cmd":
         return home / ".aitermite" / "aitermite-cmd-init.bat"
     if shell == "clink":
@@ -95,6 +121,15 @@ def install_shell(shell: str) -> InstallResult:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(clink_lua(), encoding="utf-8")
         return InstallResult("clink", [path], ["Wrote Clink Lua hook."])
+    if shell in {"powershell", "pwsh"}:
+        content = shell_init("powershell")
+        paths = powershell_profile_paths()
+        for path in paths:
+            _write_profile_block(path, content)
+        messages = ["Installed PowerShell integration for Windows PowerShell 5.1 and PowerShell 7+."]
+        if shutil.which("aitermite") is None:
+            messages.append("Note: 'aitermite' is not on PATH; the hook uses 'python -m aitermite' so it still works.")
+        return InstallResult("powershell", paths, messages)
     path = profile_path(shell)
     _write_profile_block(path, shell_init(shell))
     return InstallResult(shell, [path], [f"Installed {shell} integration. Restart terminal or source the profile."])
@@ -146,28 +181,36 @@ alias aicheck "aitermite --precheck"
 '''
 
 
-def powershell_init() -> str:
-    return r'''
+def powershell_init(launcher: str | None = None) -> str:
+    launcher = launcher or launcher_command()
+    template = r'''
 # AITERMITE PowerShell integration
 if (-not $global:__AITERMITE_ORIGINAL_PROMPT) { $global:__AITERMITE_ORIGINAL_PROMPT = (Get-Command prompt).ScriptBlock }
 $global:__AITERMITE_LAST_HISTORY_ID = 0
 function global:prompt {
     $ok = $?
-    $code = if ($global:LASTEXITCODE -is [int]) { [int]$global:LASTEXITCODE } elseif (-not $ok) { 1 } else { 0 }
+    $native = $global:LASTEXITCODE
+    # Prefer $? : PowerShell-native failures (e.g. command-not-found typos) do
+    # NOT update $LASTEXITCODE, so a stale 0 would otherwise hide the failure.
+    $code = if (-not $ok) { if (($native -is [int]) -and ($native -ne 0)) { [int]$native } else { 1 } } else { 0 }
     try {
         $hist = Get-History -Count 1 -ErrorAction SilentlyContinue
         if ($hist -and $hist.Id -ne $global:__AITERMITE_LAST_HISTORY_ID -and $code -ne 0) {
             $global:__AITERMITE_LAST_HISTORY_ID = $hist.Id
             $cmd = [string]$hist.CommandLine
-            if ($cmd -and -not $cmd.TrimStart().StartsWith("aitermite")) { aitermite --postfail $code -- $cmd 2>$null }
+            if ($cmd -and -not $cmd.TrimStart().StartsWith("aitermite")) { __LAUNCHER__ --postfail $code -- $cmd 2>$null }
         }
     } catch {}
-    Set-Alias ait aitermite
-    Set-Alias af aitermite
-    function global:aicheck { aitermite --precheck @args }
+    $global:LASTEXITCODE = $native  # restore so the hook is transparent to the user
     & $global:__AITERMITE_ORIGINAL_PROMPT
 }
+Set-Alias ait aitermite -Scope Global -ErrorAction SilentlyContinue
+Set-Alias af aitermite -Scope Global -ErrorAction SilentlyContinue
+function global:aicheck { __LAUNCHER__ --precheck @args }
 '''
+    # PowerShell needs the call operator (&) when the launcher is a quoted path.
+    invoke = launcher if launcher.lstrip().startswith("&") else (f"& {launcher}" if launcher.startswith('"') else launcher)
+    return template.replace("__LAUNCHER__", invoke)
 
 
 def cmd_init() -> str:

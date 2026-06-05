@@ -13,7 +13,7 @@ from .history import last_command
 from .precheck import precheck_command
 from .providers import suggest
 from .safety import assess_command
-from .shell_integration import animation_text, detect_shell, install_shell, profile_path, shell_init
+from .shell_integration import animation_text, detect_shell, find_executable, install_shell, profile_path, scripts_dirs, shell_init
 
 CYAN = "\033[96m"
 RESET = "\033[0m"
@@ -57,8 +57,13 @@ def print_doctor(provider: str, no_color: bool = False) -> None:
     on_path = shutil.which("aitermite")
     print(f"aitermite on PATH: {'yes (' + on_path + ')' if on_path else 'NO'}")
     if not on_path:
-        scripts = os.path.join(os.path.dirname(sys.executable), "Scripts") if os.name == "nt" else os.path.dirname(sys.executable)
-        print(f"  hint: add the Scripts dir to PATH ({scripts}); shell hooks fall back to 'python -m aitermite'.")
+        exe = find_executable()
+        if exe:
+            print(f"  found at: {exe}")
+            print(f"  hint: add this dir to PATH so 'aitermite'/'ait'/'af' work directly: {os.path.dirname(exe)}")
+            print("        (the shell hook and aliases already fall back to 'python -m aitermite', so auto-fix works either way.)")
+        else:
+            print(f"  hint: add your Scripts dir to PATH (one of: {', '.join(scripts_dirs())}); shell hooks fall back to 'python -m aitermite'.")
 
     shell = detect_shell()
     prof = profile_path(shell)

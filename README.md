@@ -13,7 +13,7 @@
 
 ## Current packaged release
 
-Latest PyPI release: **v0.4.1 Clink Bootstrap**.
+Latest PyPI release: **v0.4.2 Clink Bootstrap**.
 
 Main features:
 
@@ -48,7 +48,7 @@ aitermite --version
 Install a specific version:
 
 ```bash
-python -m pip install aitermite==0.4.1
+python -m pip install aitermite==0.4.2
 ```
 
 ## Quick start
@@ -65,7 +65,7 @@ After shell integration, restart the terminal. AITERMITE can then print suggesti
 ## Install from wheel
 
 ```bash
-python -m pip install aitermite-0.4.1-py3-none-any.whl
+python -m pip install aitermite-0.4.2-py3-none-any.whl
 aitermite --doctor
 ```
 
@@ -164,24 +164,21 @@ AITERMITE blocks or avoids risky commands such as destructive delete patterns, `
 ## Validation from local build
 
 ```text
-CLI tests: 9/9 passed
-History tests: 5/5 passed
-Precheck tests: 7/7 passed
-Redaction tests: 2/2 passed
-Safety tests: 7/7 passed
-Shell integration tests: 9/9 passed
-Total targeted tests: 39/39 passed
-Pentest checks: 11/11 passed
-Wheel build: passed
-Clean virtualenv install: passed
+CLI builtin typo tests: 2/2 passed
+Precheck tests: 2/2 passed
+Redaction tests: 1/1 passed
+Safety tests: 3/3 passed
+Total targeted tests: 8/8 passed
+Pentest checks: passed
+Editable install: passed
+Wheel build: passed (aitermite-0.4.2-py3-none-any.whl)
 CLI smoke test: passed
-Clink hook generation: passed
-Version: 0.4.1
+Version: 0.4.2
 ```
 
 ## Repository import status
 
-This repository has been initialized from ChatGPT. The full v0.4.1 source ZIP and wheel were generated in the workspace. Source import should include:
+This repository has been initialized from ChatGPT. The full v0.4.2 source ZIP and wheel were generated in the workspace. Source import should include:
 
 ```text
 src/aitermite/

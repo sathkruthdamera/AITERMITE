@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import sysconfig
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -46,6 +47,47 @@ def detect_shell() -> str:
     return "bash"
 
 
+def scripts_dirs() -> list[str]:
+    """Directories where pip may have placed the ``aitermite`` console script.
+
+    A ``pip install --user`` on Windows drops the script in the *user-site*
+    Scripts dir (e.g. ``%APPDATA%\\Python\\Python3xx\\Scripts``), NOT next to
+    ``python.exe`` — so we have to consult both install schemes, not just the
+    interpreter directory.
+    """
+    dirs: list[str] = []
+    user_scheme = "nt_user" if os.name == "nt" else "posix_user"
+    for scheme in (None, user_scheme):
+        try:
+            dirs.append(sysconfig.get_path("scripts") if scheme is None
+                        else sysconfig.get_path("scripts", scheme=scheme))
+        except (KeyError, ValueError):
+            pass
+    base = os.path.dirname(sys.executable)
+    dirs.append(os.path.join(base, "Scripts") if os.name == "nt" else base)
+    seen: set[str] = set()
+    out: list[str] = []
+    for d in dirs:
+        if d and d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def find_executable() -> str | None:
+    """Locate the installed ``aitermite`` launcher, even when its Scripts dir is
+    not on PATH (the common pip ``--user`` gotcha on Windows)."""
+    found = shutil.which("aitermite")
+    if found:
+        return found
+    name = "aitermite.exe" if os.name == "nt" else "aitermite"
+    for d in scripts_dirs():
+        candidate = os.path.join(d, name)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def launcher_command() -> str:
     """Resolve a launcher that works even when the Scripts dir is not on PATH.
 
@@ -53,7 +95,7 @@ def launcher_command() -> str:
     on PATH (a common pip ``--user`` install gotcha on Windows). ``python -m
     aitermite`` via the current interpreter always resolves the package.
     """
-    exe = shutil.which("aitermite")
+    exe = find_executable()
     if exe:
         return f'"{exe}"'
     return f'"{sys.executable}" -m aitermite'
@@ -128,7 +170,9 @@ def install_shell(shell: str) -> InstallResult:
             _write_profile_block(path, content)
         messages = ["Installed PowerShell integration for Windows PowerShell 5.1 and PowerShell 7+."]
         if shutil.which("aitermite") is None:
-            messages.append("Note: 'aitermite' is not on PATH; the hook uses 'python -m aitermite' so it still works.")
+            exe = find_executable()
+            where = exe if exe else "python -m aitermite"
+            messages.append(f"Note: 'aitermite' is not on PATH; the hook and the 'ait'/'af' aliases call {where} directly, so they still work.")
         return InstallResult("powershell", paths, messages)
     path = profile_path(shell)
     _write_profile_block(path, shell_init(shell))
@@ -145,6 +189,7 @@ add-zsh-hook preexec _aitermite_preexec
 add-zsh-hook precmd _aitermite_precmd
 alias ait='aitermite'
 alias af='aitermite'
+alias ai='aitermite ask'
 alias aicheck='aitermite --precheck'
 '''
 
@@ -159,6 +204,7 @@ trap '__aitermite_preexec' DEBUG
 if [ -n "${PROMPT_COMMAND:-}" ]; then PROMPT_COMMAND="__aitermite_postfail; $PROMPT_COMMAND"; else PROMPT_COMMAND="__aitermite_postfail"; fi
 alias ait='aitermite'
 alias af='aitermite'
+alias ai='aitermite ask'
 alias aicheck='aitermite --precheck'
 '''
 
@@ -177,6 +223,7 @@ function __aitermite_postfail --on-event fish_postexec
 end
 alias ait aitermite
 alias af aitermite
+alias ai "aitermite ask"
 alias aicheck "aitermite --precheck"
 '''
 
@@ -204,8 +251,10 @@ function global:prompt {
     $global:LASTEXITCODE = $native  # restore so the hook is transparent to the user
     & $global:__AITERMITE_ORIGINAL_PROMPT
 }
-Set-Alias ait aitermite -Scope Global -ErrorAction SilentlyContinue
-Set-Alias af aitermite -Scope Global -ErrorAction SilentlyContinue
+# Functions (not Set-Alias) so 'ait'/'af' work even when aitermite is not on PATH.
+function global:ait { __LAUNCHER__ @args }
+function global:af { __LAUNCHER__ @args }
+function global:ai { __LAUNCHER__ ask @args }
 function global:aicheck { __LAUNCHER__ --precheck @args }
 '''
     # PowerShell needs the call operator (&) when the launcher is a quoted path.
@@ -219,6 +268,7 @@ def cmd_init() -> str:
 REM AITERMITE cmd.exe helpers. For automatic cmd.exe hooks, install Clink and use aitermite --install-shell clink.
 doskey ait=aitermite $*
 doskey af=aitermite $*
+doskey ai=aitermite ask $*
 doskey aicheck=aitermite --precheck $*
 where clink >nul 2>nul
 if %ERRORLEVEL% EQU 0 clink inject --quiet >nul 2>nul
@@ -250,6 +300,7 @@ def universal_init() -> str:
 # AITERMITE universal helper
 alias ait='aitermite'
 alias af='aitermite'
+alias ai='aitermite ask'
 alias aicheck='aitermite --precheck'
 arun(){ "$@"; code=$?; if [ "$code" -ne 0 ]; then aitermite --postfail "$code" -- "$*" 2>/dev/null || true; fi; return "$code"; }
 '''

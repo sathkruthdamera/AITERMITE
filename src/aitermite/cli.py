@@ -9,11 +9,15 @@ import shutil
 import sys
 
 from . import __version__
+from .agents import ask as ask_llm, available_providers
+from .extract import candidates as extract_candidates
 from .history import last_command
+from .interactive import interactive_supported, run_command, select_command
+from .nl_detect import looks_like_thought
 from .precheck import precheck_command
 from .providers import suggest
 from .safety import assess_command
-from .shell_integration import animation_text, detect_shell, install_shell, profile_path, shell_init
+from .shell_integration import animation_text, detect_shell, find_executable, install_shell, profile_path, scripts_dirs, shell_init
 
 CYAN = "\033[96m"
 RESET = "\033[0m"
@@ -57,8 +61,13 @@ def print_doctor(provider: str, no_color: bool = False) -> None:
     on_path = shutil.which("aitermite")
     print(f"aitermite on PATH: {'yes (' + on_path + ')' if on_path else 'NO'}")
     if not on_path:
-        scripts = os.path.join(os.path.dirname(sys.executable), "Scripts") if os.name == "nt" else os.path.dirname(sys.executable)
-        print(f"  hint: add the Scripts dir to PATH ({scripts}); shell hooks fall back to 'python -m aitermite'.")
+        exe = find_executable()
+        if exe:
+            print(f"  found at: {exe}")
+            print(f"  hint: add this dir to PATH so 'aitermite'/'ait'/'af' work directly: {os.path.dirname(exe)}")
+            print("        (the shell hook and aliases already fall back to 'python -m aitermite', so auto-fix works either way.)")
+        else:
+            print(f"  hint: add your Scripts dir to PATH (one of: {', '.join(scripts_dirs())}); shell hooks fall back to 'python -m aitermite'.")
 
     shell = detect_shell()
     prof = profile_path(shell)
@@ -122,6 +131,47 @@ def maybe_handle_aitermite_builtin_typo(args: argparse.Namespace) -> int | None:
     return None
 
 
+def run_ask_flow(thought: str, *, provider: str, no_color: bool, as_json: bool, ambient: bool) -> int:
+    """Answer a natural-language thought via an AI backend and, if the answer
+    contains runnable commands, offer an arrow-key menu to confirm and run one."""
+    color = not no_color
+    result = ask_llm(thought, provider=provider, shell=detect_shell(), os_name=platform.platform())
+
+    if not result.ok:
+        if as_json:
+            print(json.dumps({"thought": thought, "ok": False, "error": result.error}))
+        elif not ambient:
+            print(f"AITERMITE: {result.error}")
+        return 0 if ambient else 1
+
+    cands = extract_candidates(result.answer)
+    if as_json:
+        print(json.dumps({
+            "thought": thought, "ok": True, "provider": result.provider, "answer": result.answer,
+            "commands": [{"command": c.command, "risk": c.risk, "allowed": c.allowed} for c in cands],
+        }, indent=2))
+        return 0
+
+    print(cyan(f"AITERMITE · {result.provider}", color))
+    print(result.answer)
+    if not cands:
+        return 0
+
+    if interactive_supported():
+        print()
+        chosen = select_command(cands, color=color)
+        if chosen is None:
+            return 0
+        return run_command(chosen.command, color=color)
+
+    print()
+    print(cyan("Runnable commands:", color))
+    for i, c in enumerate(cands, 1):
+        flag = "" if c.allowed else "  (blocked: dangerous)"
+        print(f"  {i}. [{c.risk}] {c.command}{flag}")
+    return 0
+
+
 def _harden_stdio() -> None:
     """Avoid UnicodeEncodeError on legacy Windows consoles (cp1252) when output
     contains non-ASCII characters (animation glyphs, provider suggestions)."""
@@ -140,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--doctor", action="store_true")
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--provider", default=os.getenv("AITERMITE_PROVIDER", "auto"), choices=["auto", "heuristic", "ollama", "openai"])
+    parser.add_argument("--ask", action="store_true", help="Treat input as a natural-language thought and answer it.")
+    parser.add_argument("--ask-provider", dest="ask_provider", default=os.getenv("AITERMITE_ASK_PROVIDER", "auto"), choices=["auto", "claude", "codex", "ollama"])
     parser.add_argument("--error", default="")
     parser.add_argument("--precheck", action="store_true")
     parser.add_argument("--postfail", type=int, default=None)
@@ -168,6 +220,11 @@ def main(argv: list[str] | None = None) -> int:
         print("Restart your terminal, then test with: gti status")
         return 0
 
+    ask_requested = args.ask
+    if args.command and args.command[0].strip().lower() == "ask":
+        ask_requested = True
+        args.command = args.command[1:]
+
     builtin_result = maybe_handle_aitermite_builtin_typo(args)
     if builtin_result is not None:
         return builtin_result
@@ -175,11 +232,31 @@ def main(argv: list[str] | None = None) -> int:
     command = " ".join(args.command).strip()
     if command.startswith("-- "):
         command = command[3:]
+
+    if ask_requested:
+        if not command and interactive_supported():
+            try:
+                command = input("AITERMITE › ").strip()
+            except (EOFError, KeyboardInterrupt):
+                command = ""
+        if not command:
+            print("Nothing to ask. Try: aitermite ask \"how do I ...\"", file=sys.stderr)
+            return 2
+        return run_ask_flow(command, provider=args.ask_provider, no_color=args.no_color, as_json=args.as_json, ambient=False)
+
     if not command:
         command = last_command() or ""
     if not command:
         print("No command supplied and no shell history found.", file=sys.stderr)
         return 2
+
+    # No prefix needed: a plain natural-language thought routes to the AI ask
+    # flow instead of the typo fixer, as long as an AI backend is available.
+    if not args.precheck and looks_like_thought(command):
+        if available_providers():
+            return run_ask_flow(command, provider=args.ask_provider, no_color=args.no_color, as_json=args.as_json, ambient=args.postfail is not None)
+        if args.postfail is not None:
+            return 0  # a thought, but no AI backend; stay quiet inside the shell hook
 
     if args.precheck:
         result = precheck_command(command)

@@ -189,6 +189,7 @@ add-zsh-hook preexec _aitermite_preexec
 add-zsh-hook precmd _aitermite_precmd
 alias ait='aitermite'
 alias af='aitermite'
+alias ai='aitermite ask'
 alias aicheck='aitermite --precheck'
 '''
 
@@ -203,6 +204,7 @@ trap '__aitermite_preexec' DEBUG
 if [ -n "${PROMPT_COMMAND:-}" ]; then PROMPT_COMMAND="__aitermite_postfail; $PROMPT_COMMAND"; else PROMPT_COMMAND="__aitermite_postfail"; fi
 alias ait='aitermite'
 alias af='aitermite'
+alias ai='aitermite ask'
 alias aicheck='aitermite --precheck'
 '''
 
@@ -221,6 +223,7 @@ function __aitermite_postfail --on-event fish_postexec
 end
 alias ait aitermite
 alias af aitermite
+alias ai "aitermite ask"
 alias aicheck "aitermite --precheck"
 '''
 
@@ -251,6 +254,7 @@ function global:prompt {
 # Functions (not Set-Alias) so 'ait'/'af' work even when aitermite is not on PATH.
 function global:ait { __LAUNCHER__ @args }
 function global:af { __LAUNCHER__ @args }
+function global:ai { __LAUNCHER__ ask @args }
 function global:aicheck { __LAUNCHER__ --precheck @args }
 '''
     # PowerShell needs the call operator (&) when the launcher is a quoted path.
@@ -264,6 +268,7 @@ def cmd_init() -> str:
 REM AITERMITE cmd.exe helpers. For automatic cmd.exe hooks, install Clink and use aitermite --install-shell clink.
 doskey ait=aitermite $*
 doskey af=aitermite $*
+doskey ai=aitermite ask $*
 doskey aicheck=aitermite --precheck $*
 where clink >nul 2>nul
 if %ERRORLEVEL% EQU 0 clink inject --quiet >nul 2>nul
@@ -295,6 +300,7 @@ def universal_init() -> str:
 # AITERMITE universal helper
 alias ait='aitermite'
 alias af='aitermite'
+alias ai='aitermite ask'
 alias aicheck='aitermite --precheck'
 arun(){ "$@"; code=$?; if [ "$code" -ne 0 ]; then aitermite --postfail "$code" -- "$*" 2>/dev/null || true; fi; return "$code"; }
 '''

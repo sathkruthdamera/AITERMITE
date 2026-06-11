@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aitermite"
-version = "0.4.2"
-description = "AI-powered terminal error fixer with cross-platform shell hooks"
+version = "0.5.0"
+description = "AI terminal copilot: fixes failed commands and answers plain thoughts (claude/codex), with an arrow-key run menu"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
